@@ -1,5 +1,4 @@
 import numpy as np
-from matplotlib import pyplot as plt
 
 
 def add_form_default_values():

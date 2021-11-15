@@ -1,0 +1,12 @@
+[project]
+name = "eng_app_designs"
+version = "0.1.0"
+description = ""
+authors = ["Alex Kitt"]
+
+[project.dependencies]
+python = "^3.8"
+
+[tool.yapf]
+based_on_style = "pep8"
+column_limit = 95

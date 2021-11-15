@@ -94,7 +94,8 @@ def test_does_raise_warning_for_temperature_violations():
     form_data["temperature_variable"] = temperature_vary_annulus_hot()
     with pytest.raises(Warning) as error:
         output = concentric_tube_hx.main(form_data)
-    assert 'Error! Heat exchanged from cold to hot! Check fluid inlet temperatures and flow rates.' in str(error.value)
+    assert 'Error! Heat exchanged from cold to hot! Check fluid inlet temperatures and flow rates.' in str(
+        error.value)
 
 
 def engine_oil_example_data():
@@ -159,8 +160,9 @@ def test_does_raise_in_transitional_regime_pipe():
     form_data["fluid_pipe_flow_rate_kg_s"] = 0.1
     with pytest.raises(Warning) as error:
         output = concentric_tube_hx.main(form_data)
-    assert str(error.value) == ("Average Reynolds number of fluid in pipe calculated as 7025.05 which is in "
-                                "transitional regime results unreliable. Acceptable range is: 2300 > Reynolds > 10000")
+    assert str(error.value) == (
+        "Average Reynolds number of fluid in pipe calculated as 7025.05 which is in "
+        "transitional regime results unreliable. Acceptable range is: 2300 > Reynolds > 10000")
 
 
 def test_does_raise_warning_if_pipe_diameters_incorrect():
@@ -188,6 +190,7 @@ def test_does_raise_in_transitional_regime_annulus():
         output = concentric_tube_hx.main(form_data)
         assert output["reynolds_annulus"]["value"] == 1
 
-    assert str(error.value) == ('Average Annulus fluid Reynolds number calculated as 3264.72 which is in '
-                                'transitional regime results unreliable. Acceptable range is: 2300 > Reynolds '
-                                '> 10000')
+    assert str(error.value) == (
+        'Average Annulus fluid Reynolds number calculated as 3264.72 which is in '
+        'transitional regime results unreliable. Acceptable range is: 2300 > Reynolds '
+        '> 10000')

@@ -3,8 +3,7 @@ from designs import hot_wire_temperature
 
 def nichrome_resistance_wire():
     # resistance is technically resistivity in ohm.mm^2/m
-    return {"emissivity": 0.7,
-            "resistance": 1.1}
+    return {"emissivity": 0.7, "resistance": 1.1}
 
 
 def form_data_example():

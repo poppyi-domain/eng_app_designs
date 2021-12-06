@@ -1,3 +1,8 @@
+"""1D transient thermal conduction calculator.
+
+As used: https://www.poppyi.com/app_design_form/public_render/1D%20transient%20thermal%20conduction
+"""
+
 import numpy as np
 from typing import Callable
 from matplotlib import pyplot as plt

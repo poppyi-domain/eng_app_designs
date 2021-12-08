@@ -1,13 +1,10 @@
-"""1D transient thermal conduction calculator.
-
-As used: https://www.poppyi.com/app_design_form/public_render/1D%20transient%20thermal%20conduction
-"""
-
+import io
 import numpy as np
+import pandas as pd
 from typing import Callable
 from matplotlib import pyplot as plt
 from scipy import integrate
-from typing import TypedDict
+from typing import TypedDict, Optional
 
 BOUND_CONSTANT_TEMP_START_END = "constant temperature start and end"
 BOUND_CONTANT_TEMP_START_INSULATED_END = "constant temperature start insulated end"
@@ -23,7 +20,7 @@ class Config(TypedDict):
     simulation_time_seconds: float
     boundary_conditions: str
     boundary_temperature_start: float
-    boundary_temperature_end: float
+    boundary_temperature_end: Optional[float]
     starting_temperature: float
 
 
@@ -161,27 +158,129 @@ def get_solver_config(setup: Config) -> SolverConfig:
     return SolverConfig(starting_temperatures=initial_temperatures, solver_physics=physics)
 
 
-if __name__ == "__main__":
+def add_form_default_values():
+    """
+    Change default form rendering on page load.
+
+    Add default form values i.e. {'<variable name>': {'value': 10}}
+    Ignore some of the input fields i.e. {'<variable name>': {'action': 'ignore'}}
+    """
+    return {
+        "thermal_conductivity": {
+            "action": "update",
+            "value": 0.6
+        },
+        "heat_capacity": {
+            "action": "update",
+            "value": 4200
+        },
+        "density": {
+            "action": "update",
+            "value": 1000
+        },
+        "grid_spacing_meters": {
+            "action": "update",
+            "value": 0.001
+        },
+        "number_of_grid_nodes": {
+            "action": "update",
+            "value": 10
+        },
+        "simulation_time_seconds": {
+            "action": "update",
+            "value": 1000
+        },
+        "boundary_temperature_start": {
+            "action": "update",
+            "value": 100
+        },
+        "boundary_temperature_end": {
+            "action": "update",
+            "value": 20
+        },
+        "starting_temperature": {
+            "action": "update",
+            "value": 20
+        },
+    }
+
+
+def load_boundary_conditions(form_data):
+    if form_data["boundary_condition"]["value"] == "constant temperature start and end":
+        return {
+            "boundary_temperature_start": {
+                "action": "update",
+                "value": 100
+            },
+            "boundary_temperature_end": {
+                "action": "update",
+                "value": 20
+            }
+        }
+    elif form_data["boundary_condition"][
+            "value"] == "constant temperature start insulated end":
+        return {
+            "boundary_temperature_start": {
+                "action": "update",
+                "value": 100
+            },
+            "boundary_temperature_end": {
+                "action": "delete"
+            }
+        }
+
+
+def main(form_data):
+    """
+    The function which gets executed upon the user pressing submit button.
+
+    Args:
+        form_data(dict): A dictionary of the field data. The keys to the form
+                         data dictionary are the field names.
+    """
+    if form_data.get("boundary_temperature_start") is None:
+        raise Warning("Boundary conditions not loaded!")
+
+    if (form_data["boundary_condition"]["value"] == "constant temperature start and end"
+            and form_data.get("boundary_temperature_end") is None):
+        raise Warning("Missing boundary temperature end for boundary condition {}".format(
+            form_data["boundary_condition"]["value"]))
+
     conf = Config(
-        thermal_conductivity=0.6,
-        heat_capacity=4200,
-        density=1000,
-        grid_spacing_meters=1e-3,
-        number_of_grid_nodes=10,
-        simulation_time_seconds=1000,
-        boundary_temperature_start=100,
-        boundary_temperature_end=20,
-        starting_temperature=20,
-        boundary_conditions=BOUND_CONTANT_TEMP_START_INSULATED_END,
+        thermal_conductivity=form_data["thermal_conductivity"],
+        heat_capacity=form_data["heat_capacity"],
+        density=form_data["density"],
+        grid_spacing_meters=form_data["grid_spacing_meters"],
+        number_of_grid_nodes=int(form_data["number_of_grid_nodes"]),
+        simulation_time_seconds=form_data["simulation_time_seconds"],
+        boundary_temperature_start=form_data["boundary_temperature_start"],
+        boundary_temperature_end=form_data.get("boundary_temperature_end"),
+        starting_temperature=form_data["starting_temperature"],
+        boundary_conditions=form_data["boundary_condition"]["value"],
     )
 
     solver_config = get_solver_config(conf)
 
     times, temperatures = Solver.solve(solver_config, conf)
+    fig = plt.figure(figsize=[10, 8])
+    df = pd.DataFrame(temperatures,
+                      columns=[f'Temp @node{i}' for i in range(len(temperatures[0]))])
+    df['time'] = times
+
     plt.plot(times, temperatures, "-x")
     plt.title("Temperatures in time")
     plt.ylabel("Temperatures")
     plt.xlabel("Time (seconds)")
     plt.legend()
-    plt.grid(b=True)
-    plt.show()
+    imgdata = io.StringIO()
+    fig.savefig(imgdata, format='svg')
+    return {
+        'plot_results': {
+            'action': 'update',
+            'value': imgdata.getvalue()
+        },
+        'output_table': {
+            'action': 'update',
+            'value': df.to_html(index=False)
+        }
+    }

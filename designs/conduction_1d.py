@@ -8,7 +8,7 @@ from typing import TypedDict, Optional
 
 BOUND_CONSTANT_TEMP_START_END = "constant temperature start and end"
 BOUND_CONTANT_TEMP_START_INSULATED_END = "constant temperature start insulated end"
-BOUND_CONSTANT_HEAT_FLUX = "constant heat flux start and end"
+BOUND_CONV_START_INSULATED_END = "convective start insulated end"
 
 
 class Config(TypedDict):
@@ -21,6 +21,7 @@ class Config(TypedDict):
     boundary_conditions: str
     boundary_temperature_start: float
     boundary_temperature_end: Optional[float]
+    convective_heat_trans_coeff: Optional[float]
     starting_temperature: float
 
 
@@ -35,7 +36,7 @@ class ResolveInitialTemperatures:
         self._map = {
             BOUND_CONSTANT_TEMP_START_END: self._configure_constant_temperature,
             BOUND_CONTANT_TEMP_START_INSULATED_END: self._configure_insulated_boundary,
-            BOUND_CONSTANT_HEAT_FLUX: self._configure_constant_heat_flux_boundary,
+            BOUND_CONV_START_INSULATED_END: self._configure_conv_start_insulated_end,
         }
 
     def resolve(self, setup: Config):
@@ -61,8 +62,10 @@ class ResolveInitialTemperatures:
         return temperatures_initial
 
     @staticmethod
-    def _configure_constant_heat_flux_boundary(setup: Config):
-        return np.array([setup["starting_temperature"]] * setup["number_of_grid_nodes"])
+    def _configure_conv_start_insulated_end(setup: Config):
+        temperatures_initial = np.array([setup["starting_temperature"]] *
+                                        setup["number_of_grid_nodes"])
+        return temperatures_initial
 
 
 class PhysicsFactory:
@@ -71,7 +74,7 @@ class PhysicsFactory:
             BOUND_CONSTANT_TEMP_START_END: self._constant_temperature,
             BOUND_CONTANT_TEMP_START_INSULATED_END:
             self._constant_temperature_start_insulated_end,
-            BOUND_CONSTANT_HEAT_FLUX: None,
+            BOUND_CONV_START_INSULATED_END: self._convective_start_insulated_end,
         }
 
     def resolve(self, setup: Config):
@@ -99,6 +102,21 @@ class PhysicsFactory:
 
         gradients[-1] = (constant * (temperatures[-2] - temperatures[-1]) /
                          config["grid_spacing_meters"]**2)
+        return gradients
+
+    @staticmethod
+    def _convective_start_insulated_end(t, temperatures, config: Config):
+        gradients = PhysicsFactory._constant_temperature_start_insulated_end(
+            t, temperatures, config)
+
+        h = config["convective_heat_trans_coeff"]
+        k = config["thermal_conductivity"]
+        T_infinity = config["boundary_temperature_start"]
+        c = 1 / (config["density"] * config["heat_capacity"] * config["grid_spacing_meters"])
+
+        gradients[0] = (c *
+                        (h * (T_infinity - temperatures[0]) + k *
+                         (temperatures[2] - temperatures[1]) / config["grid_spacing_meters"]))
         return gradients
 
 
@@ -230,7 +248,23 @@ def load_boundary_conditions(form_data):
         }
 
 
-def main(form_data):
+def _package_form_data(form_data) -> Config:
+    return Config(
+        thermal_conductivity=form_data["thermal_conductivity"],
+        heat_capacity=form_data["heat_capacity"],
+        density=form_data["density"],
+        grid_spacing_meters=form_data["grid_spacing_meters"],
+        number_of_grid_nodes=int(form_data["number_of_grid_nodes"]),
+        simulation_time_seconds=form_data["simulation_time_seconds"],
+        boundary_temperature_start=form_data["boundary_temperature_start"],
+        boundary_temperature_end=form_data.get("boundary_temperature_end"),
+        convective_heat_trans_coeff=form_data.get("convective_heat_trans_coeff"),
+        starting_temperature=form_data["starting_temperature"],
+        boundary_conditions=form_data["boundary_condition"]["value"],
+    )
+
+
+def main(form_data: dict):
     """
     The function which gets executed upon the user pressing submit button.
 
@@ -246,18 +280,13 @@ def main(form_data):
         raise Warning("Missing boundary temperature end for boundary condition {}".format(
             form_data["boundary_condition"]["value"]))
 
-    conf = Config(
-        thermal_conductivity=form_data["thermal_conductivity"],
-        heat_capacity=form_data["heat_capacity"],
-        density=form_data["density"],
-        grid_spacing_meters=form_data["grid_spacing_meters"],
-        number_of_grid_nodes=int(form_data["number_of_grid_nodes"]),
-        simulation_time_seconds=form_data["simulation_time_seconds"],
-        boundary_temperature_start=form_data["boundary_temperature_start"],
-        boundary_temperature_end=form_data.get("boundary_temperature_end"),
-        starting_temperature=form_data["starting_temperature"],
-        boundary_conditions=form_data["boundary_condition"]["value"],
-    )
+    if (form_data["boundary_condition"]["value"] == BOUND_CONV_START_INSULATED_END
+            and form_data.get("convective_heat_trans_coeff") is None):
+        raise Warning(
+            'Convective heat transfer coefficient must be supplied for this boundary condition.'
+        )
+
+    conf = _package_form_data(form_data)
 
     solver_config = get_solver_config(conf)
 
@@ -272,6 +301,7 @@ def main(form_data):
     plt.ylabel("Temperatures")
     plt.xlabel("Time (seconds)")
     plt.legend()
+    plt.grid()
     imgdata = io.StringIO()
     fig.savefig(imgdata, format='svg')
     return {
